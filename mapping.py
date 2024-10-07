@@ -76,7 +76,7 @@ def create_map():
     return st.session_state.map
 
 # Streamlit app starts here
-st.set_page_config(page_title="Data Visualization Tool", layout="wide")
+st.set_page_config(page_title="Data Visualization Tool TEST", layout="wide")
 
 st.title("Data Visualization Tool")
 
