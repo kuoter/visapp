@@ -78,7 +78,7 @@ def create_map():
 # Streamlit app starts here
 st.set_page_config(page_title="Data Visualization Tool", layout="wide")
 
-st.title("Data Visualization Tool to test")
+st.title("Data Visualization Tool")
 
 # Initialize session state variables if they don't exist
 if 'layer_colors' not in st.session_state:
