@@ -38,17 +38,16 @@ def geocode_location(country_code, postal_code=None, city=None):
     except Exception as e:
         return None, None, None, None, None
 
-# Function to save DataFrame to Excel and return as bytes
 def save_to_excel(df, original_filename):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Geocoding Data')
-    output.seek(0)
+    output.seek(0)  # Important to reset the pointer to the start of the BytesIO buffer
 
     current_date = datetime.now().strftime("%m%d%Y")
     export_filename = f"{original_filename.split('.')[0]}_geocoding_details_{current_date}.xlsx"
-    
-    return output.getvalue(), export_filename
+
+    return output, export_filename  # Return the BytesIO object itself, not getvalue()
 
 # Function to validate template columns
 def validate_template(df, scenario):
@@ -90,13 +89,16 @@ def zip_templates_folder():
     return zip_buffer.getvalue()
 
 # Streamlit app starts here
-st.set_page_config(page_title="Data Visualization Tool TEST", layout="wide")
+st.set_page_config(page_title="Data Visualization Tool", layout="wide")
 
 st.title("Data Visualization Tool")
 
+progress_bar_container = st.empty() 
+progress_text_container = st.empty()
+
 ### Version ###
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='text-align: center; font-size:10px; margin-top:-30px;'>Version: 1.0.0</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='text-align: center; font-size:10px; margin-top:-20px;'>Version: 1.0.0</p>", unsafe_allow_html=True)
 ### Version ###
 
 # Initialize session state variables if they don't exist
@@ -136,9 +138,10 @@ with st.sidebar:
 
 col1, col2 = st.columns([1, 3])
 
+st.sidebar.markdown("<br>" * 3, unsafe_allow_html=True) # Make some space
 st.sidebar.download_button(
     label="Download templates",
-    data=zip_templates_folder(),  # Get the zip file as bytes
+    data=zip_templates_folder(),
     file_name="templates.zip",
     mime="application/zip"
 )
@@ -166,8 +169,6 @@ if uploaded_file:
             df['warehouse_lon'] = None
 
         total_rows = len(df)
-        progress_bar_container = st.sidebar.progress(0)
-        progress_text_container = st.sidebar.empty()
 
         location_bounds = []  # List to store all coordinates for fitting map bounds
 
@@ -208,7 +209,7 @@ if uploaded_file:
 
             progress = (index + 1) / total_rows
             progress_bar_container.progress(progress)
-            progress_text_container.text(f"Processing row {index + 1}/{total_rows}...")
+            #progress_text_container.text(f"Processing row {index + 1}/{total_rows}...")
 
         st.session_state.df = df
 
@@ -239,6 +240,8 @@ if uploaded_file:
 
             # Render the map
             folium_static(map_object)
+
+            progress_bar_container.empty()
 
         elif selected_scenario == "Supply-chain visualization":
             for index, row in df.iterrows():
@@ -285,21 +288,63 @@ if uploaded_file:
             # Render the map
             folium_static(map_object)
 
-        # Save results and allow user to download the Excel file with distances
-        if st.button("Download results"):
-            result_data, result_filename = save_to_excel(df, uploaded_file.name)
-            st.download_button(label="Download Excel file", data=result_data, file_name=result_filename, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            progress_bar_container.empty()
 
         elif selected_scenario == "Distance calculation":
-            st.warning("Test if works")
-    
 
+            if 'latitude' not in df.columns or 'longitude' not in df.columns:
+                df['orig_latitude'] = None
+                df['orig_longitude'] = None
+                df['dest_latitude'] = None
+                df['dest_longitude'] = None
 
+        df['distance_km'] = None  # To store calculated distances
 
+        total_rows = len(df)
+        #progress_bar_container = st.sidebar.progress(0)
+        #progress_text_container = st.sidebar.empty()
 
-        
+        for index, row in df.iterrows():
 
+            #progress_bar_container.progress(progress)
+
+            # Geocode the origin
+            country_code_orig = row['country_code_orig']
+            postal_code_orig = row.get('postal_code_orig')
+            city_orig = row.get('city_orig')
+
+            orig_lat, orig_lon, _, _, _ = geocode_location(country_code_orig, postal_code_orig, city_orig)
+            df.at[index, 'orig_latitude'] = orig_lat
+            df.at[index, 'orig_longitude'] = orig_lon
+
+            # Geocode the destination
+            country_code_dest = row['country_code_dest']
+            postal_code_dest = row.get('postal_code_dest')
+            city_dest = row.get('city_dest')
+
+            dest_lat, dest_lon, _, _, _ = geocode_location(country_code_dest, postal_code_dest, city_dest)
+            df.at[index, 'dest_latitude'] = dest_lat
+            df.at[index, 'dest_longitude'] = dest_lon
+
+            # Calculate the distance if both origin and destination are available
+            if orig_lat and orig_lon and dest_lat and dest_lon:
+                distance = geodesic((orig_lat, orig_lon), (dest_lat, dest_lon)).kilometers
+                df.at[index, 'distance_km'] = distance
+
+            # Update the progress bar
+            #progress = (index + 1) / total_rows
+            progress_bar_container.progress(progress)
+            #progress_text_container.text(f"Processing row {index + 1}/{total_rows}...")
+
+        # Display the results in Streamlit
+        st.dataframe(df[['country_code_orig', 'postal_code_orig', 'city_orig',
+                     'country_code_dest', 'postal_code_dest', 'city_dest',
+                     'distance_km']])
+
+        # Enable users to download the results as an Excel file
+        result_data, result_filename = save_to_excel(df, uploaded_file.name)
+        st.download_button(label="Download raw data", data=result_data, file_name=result_filename, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
         # Clean the progress bars in the end
         progress_bar_container.empty()
-        progress_text_container.empty()
+        #progress_text_container.empty()
