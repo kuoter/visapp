@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import folium
 from geopy.geocoders import Nominatim
-from geopy.distance import geodesic  # Import the geodesic function for distance calculation
+from geopy.distance import geodesic
 from io import BytesIO
 from datetime import datetime
 from streamlit_folium import folium_static
@@ -136,17 +136,12 @@ with st.sidebar:
 
 col1, col2 = st.columns([1, 3])
 
-st.sidebar.header("Download Templates")
-
-if st.sidebar.button("Download all templates"):
-    templates_zip_data = zip_templates_folder()  # Get the zip file as bytes
-    st.sidebar.download_button(
-        label="Download Templates",
-        data=templates_zip_data,
-        file_name="templates.zip",
-        mime="application/zip"
-    )
-
+st.sidebar.download_button(
+    label="Download templates",
+    data=zip_templates_folder(),  # Get the zip file as bytes
+    file_name="templates.zip",
+    mime="application/zip"
+)
 
 if uploaded_file:
     # Read the Excel file with proper handling for leading zeros in postal codes
@@ -300,6 +295,9 @@ if uploaded_file:
     
 
 
+
+
+        
 
 
         # Clean the progress bars in the end
