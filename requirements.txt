@@ -66,7 +66,7 @@ streamlit_folium==0.22.1
 tenacity==8.5.0
 tk==0.1.0
 tkinterhtml==0.7
-toml==0.10.2
+toml==0.102
 tornado==6.4.1
 trio==0.26.2
 trio-websocket==0.11.1
