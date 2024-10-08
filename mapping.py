@@ -89,10 +89,6 @@ def zip_templates_folder():
     zip_buffer.seek(0)  # Move to the start of the BytesIO buffer
     return zip_buffer.getvalue()
 
-
-
-
-
 # Streamlit app starts here
 st.set_page_config(page_title="Data Visualization Tool TEST", layout="wide")
 
@@ -108,6 +104,7 @@ if 'layer_colors' not in st.session_state:
     st.session_state.layer_colors = {
         1: "#4D148C", 2: "#FF6200", 3: "#671CAA", 4: "#7D22C3", 5: "#932DA2", 6: "#A63685",
         7: "#B83F6A", 8: "#C74755", 9: "#D87E88", 10: "#C172AA",
+        # Add more colors here #
     }
 
 if 'map' not in st.session_state:
