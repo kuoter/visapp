@@ -6,6 +6,8 @@ from geopy.distance import geodesic  # Import the geodesic function for distance
 from io import BytesIO
 from datetime import datetime
 from streamlit_folium import folium_static
+import os
+from zipfile import ZipFile
 
 # Initialize the geocoder
 geolocator = Nominatim(user_agent="streamlit")
@@ -75,8 +77,24 @@ def create_map():
     
     return st.session_state.map
 
+def zip_templates_folder():
+    # Create a zip file in memory
+    zip_buffer = BytesIO()
+    with ZipFile(zip_buffer, 'w') as zip_file:
+        templates_folder = os.path.join(os.path.dirname(__file__), 'templates')  # Path to the templates folder
+        for filename in os.listdir(templates_folder):
+            file_path = os.path.join(templates_folder, filename)
+            if os.path.isfile(file_path):
+                zip_file.write(file_path, os.path.basename(file_path))  # Add file to zip
+    zip_buffer.seek(0)  # Move to the start of the BytesIO buffer
+    return zip_buffer.getvalue()
+
+
+
+
+
 # Streamlit app starts here
-st.set_page_config(page_title="Data Visualization Tool", layout="wide")
+st.set_page_config(page_title="Data Visualization Tool TEST", layout="wide")
 
 st.title("Data Visualization Tool")
 
@@ -115,6 +133,18 @@ with st.sidebar:
     create_map_button = st.button("Create", key="create")
 
 col1, col2 = st.columns([1, 3])
+
+st.sidebar.header("Download Templates")
+
+if st.sidebar.button("Download all templates"):
+    templates_zip_data = zip_templates_folder()  # Get the zip file as bytes
+    st.sidebar.download_button(
+        label="Download Templates",
+        data=templates_zip_data,
+        file_name="templates.zip",
+        mime="application/zip"
+    )
+
 
 if uploaded_file:
     # Read the Excel file with proper handling for leading zeros in postal codes
