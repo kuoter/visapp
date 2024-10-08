@@ -98,6 +98,11 @@ st.set_page_config(page_title="Data Visualization Tool TEST", layout="wide")
 
 st.title("Data Visualization Tool")
 
+### Version ###
+st.sidebar.markdown("---")
+st.sidebar.markdown("<p style='text-align: center; font-size:10px; margin-top:-20px;'>Version: 1.0.0</p>", unsafe_allow_html=True)
+### Version ###
+
 # Initialize session state variables if they don't exist
 if 'layer_colors' not in st.session_state:
     st.session_state.layer_colors = {
