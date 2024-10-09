@@ -99,7 +99,7 @@ progress_text_container = st.empty()
 
 ### Version ###
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='text-align: center; font-size:10px; margin-top:-20px;'>Version: 1.0.0</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='text-align: center; font-size:10px; margin-top:-20px;'>Version: 1.2.0</p>", unsafe_allow_html=True)
 ### Version ###
 
 # Initialize session state variables if they don't exist
