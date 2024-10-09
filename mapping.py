@@ -8,6 +8,7 @@ from datetime import datetime
 from streamlit_folium import folium_static
 import os
 from zipfile import ZipFile
+import streamlit.components.v1 as components
 
 # Initialize the geocoder
 geolocator = Nominatim(user_agent="streamlit")
@@ -134,7 +135,7 @@ with st.sidebar:
     st.session_state.scenario = selected_scenario
 
     uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
-    create_map_button = st.button("Create", key="create")
+    create_map_button = st.button("CREATE", key="create")
 
 col1, col2 = st.columns([1, 3])
 
@@ -209,14 +210,16 @@ if uploaded_file:
 
             progress = (index + 1) / total_rows
             progress_bar_container.progress(progress)
-            #progress_text_container.text(f"Processing row {index + 1}/{total_rows}...")
 
         st.session_state.df = df
 
         # Create and plot on the map
         map_object = create_map()
 
+        # Inside your "Standard visualization" scenario
         if selected_scenario == "Standard visualization":
+            plotted_layers = set()  # Track plotted layers
+
             for index, row in df.iterrows():
                 lat = row['latitude']
                 lon = row['longitude']
@@ -234,16 +237,41 @@ if uploaded_file:
                     ).add_to(map_object)
                     location_bounds.append([lat, lon])  # Add to bounds for zoom
 
+                    # Add the layer to the set of plotted layers
+                    plotted_layers.add(layer)
+
             # Fit the map to the bounds of all plotted locations
             if location_bounds:
                 map_object.fit_bounds(location_bounds)
 
-            # Render the map
-            folium_static(map_object)
+            # Render the map on the left side
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                folium_static(map_object)
+
+            # Define the legend HTML outside the map and display it on the right
+            with col2:
+                legend_html = """
+                    <div style='border:1px solid grey; padding: 1px; border-radius: 1px; background-color:black; width: 150px;font-family: "Inter", sans-serif; color: white; font-size: 13px;'>
+                    <h4>LEGEND</h4>
+                """
+
+                # Append each plotted layer and its color to the HTML string
+                for layer in plotted_layers:
+                    color = st.session_state.layer_colors.get(layer, "#808080")
+                    legend_html += f"<div style='margin-bottom: 1px;'><span style='background-color:{color}; width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 1px;'></span>  {layer} day(s)</div>"
+
+                legend_html += "</div>"
+
+                # Render the legend HTML in the right column
+                components.html(legend_html, height=150 + len(plotted_layers) * 20)  # Adjust height dynamically
 
             progress_bar_container.empty()
 
         elif selected_scenario == "Supply-chain visualization":
+            plotted_layers = set()  # Track plotted layers
+            location_bounds = []  # Initialize location bounds
+
             for index, row in df.iterrows():
                 warehouse_lat = row['warehouse_lat']
                 warehouse_lon = row['warehouse_lon']
@@ -251,6 +279,7 @@ if uploaded_file:
                 lon = row['longitude']
                 layer = row['layer']
 
+                # Plot the warehouse marker
                 if warehouse_lat and warehouse_lon:
                     folium.CircleMarker(
                         location=[warehouse_lat, warehouse_lon],
@@ -260,8 +289,9 @@ if uploaded_file:
                         fill_color='yellow',
                         fill_opacity=1.0
                     ).add_to(map_object)
-                    location_bounds.append([warehouse_lat, warehouse_lon])  # Add warehouse to bounds for zoom
+                    location_bounds.append([warehouse_lat, warehouse_lon])
 
+                # Plot the regular location markers
                 if lat and lon:
                     color = st.session_state.layer_colors.get(layer, "#808080")
                     folium.CircleMarker(
@@ -281,14 +311,41 @@ if uploaded_file:
                         color='grey', weight=0.5, opacity=1
                     ).add_to(map_object)
 
+                    # Add the layer to the set of plotted layers
+                    plotted_layers.add(layer)
+
             # Fit the map to the bounds of all plotted locations
             if location_bounds:
                 map_object.fit_bounds(location_bounds)
 
-            # Render the map
-            folium_static(map_object)
+            # Render the map on the left side
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                folium_static(map_object)
+
+            # Define the legend HTML outside the map and display it on the right
+            with col2:
+                legend_html = """
+                    <div style='border:1px solid grey; padding: 1px; border-radius: 1px; background-color:black; width: 150px; font-family: "Inter", sans-serif; color: white; font-size: 13px;'>
+                    <h4>LEGEND</h4>
+                    <div style='margin-bottom: 1px;'>
+                        <span style='background-color:yellow; width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 1px;'></span>
+                        Warehouse/Shipping location
+                    </div>
+                """
+
+                # Append each plotted layer and its color to the HTML string
+                for layer in plotted_layers:
+                    color = st.session_state.layer_colors.get(layer, "#808080")
+                    legend_html += f"<div style='margin-bottom: 1px;'><span style='background-color:{color}; width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 1px;'></span>  {layer} day(s)</div>"
+
+                legend_html += "</div>"
+
+                # Render the legend HTML in the right column
+                components.html(legend_html, height=150 + len(plotted_layers) * 20)  # Adjust height dynamically
 
             progress_bar_container.empty()
+
 
         elif selected_scenario == "Distance calculation":
 
@@ -298,15 +355,11 @@ if uploaded_file:
                 df['dest_latitude'] = None
                 df['dest_longitude'] = None
 
-        df['distance_km'] = None  # To store calculated distances
+        df['distance_km'] = None
 
         total_rows = len(df)
-        #progress_bar_container = st.sidebar.progress(0)
-        #progress_text_container = st.sidebar.empty()
 
         for index, row in df.iterrows():
-
-            #progress_bar_container.progress(progress)
 
             # Geocode the origin
             country_code_orig = row['country_code_orig']
@@ -329,12 +382,10 @@ if uploaded_file:
             # Calculate the distance if both origin and destination are available
             if orig_lat and orig_lon and dest_lat and dest_lon:
                 distance = geodesic((orig_lat, orig_lon), (dest_lat, dest_lon)).kilometers
-                df.at[index, 'distance_km'] = distance
+                df.at[index, 'distance_km'] = int(distance)  # Convert to integer to remove decimal points
 
             # Update the progress bar
-            #progress = (index + 1) / total_rows
             progress_bar_container.progress(progress)
-            #progress_text_container.text(f"Processing row {index + 1}/{total_rows}...")
 
         # Display the results in Streamlit
         st.dataframe(df[['country_code_orig', 'postal_code_orig', 'city_orig',
@@ -347,4 +398,3 @@ if uploaded_file:
 
         # Clean the progress bars in the end
         progress_bar_container.empty()
-        #progress_text_container.empty()
