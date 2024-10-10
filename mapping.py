@@ -13,30 +13,93 @@ import streamlit.components.v1 as components
 # Initialize the geocoder
 geolocator = Nominatim(user_agent="streamlit")
 
-# Function to geocode based on country and postal code or city
+# # Function to geocode based on country and postal code or city
+# def geocode_location_old_approach(country_code, postal_code=None, city=None):
+#     try:
+#         if postal_code:
+#             location = geolocator.geocode(f"{postal_code}, {country_code}")
+#             if location:
+#                 return location.latitude, location.longitude, postal_code, city, country_code
+            
+#             if city:
+#                 location = geolocator.geocode(f"{city}, {postal_code}, {country_code}")
+#                 if location:
+#                     return location.latitude, location.longitude, postal_code, city, country_code
+        
+#         if city:
+#             location = geolocator.geocode(f"{city}, {country_code}")
+#             if location:
+#                 return location.latitude, location.longitude, None, city, country_code
+        
+#         capital_location = geolocator.geocode(f"capital city of {country_code}")
+#         if capital_location:
+#             return capital_location.latitude, capital_location.longitude, None, None, country_code
+        
+#         return None, None, None, None, None
+#     except Exception as e:
+#         return None, None, None, None, None
+
+# Function to geocode based on country code, postal code, and city with fallback to nearest location
 def geocode_location(country_code, postal_code=None, city=None):
     try:
+        # Helper function to check if geocoded location is in the correct country
+        def is_in_correct_country(location, country_code):
+            if location and hasattr(location, 'raw'):
+                # Ensure the country code matches
+                address_details = location.raw.get('address', {})
+                return address_details.get('country_code', '').upper() == country_code.upper()
+            return False
+        
+        # Helper function to attempt nearest location reverse geocoding
+        def find_nearest_location(location):
+            if location:
+                # Attempt reverse geocoding near the found location
+                reverse_location = geolocator.reverse((location.latitude, location.longitude), exactly_one=True)
+                if reverse_location and is_in_correct_country(reverse_location, country_code):
+                    return reverse_location.latitude, reverse_location.longitude, postal_code, city, country_code
+            return None, None, None, None, None
+
+        # Try geocoding by city, postal code, and country (most specific)
+        if city and postal_code:
+            location = geolocator.geocode(f"{city}, {postal_code}, {country_code}")
+            if location and is_in_correct_country(location, country_code):
+                return location.latitude, location.longitude, postal_code, city, country_code
+            # Attempt nearest location if unsuccessful
+            nearest = find_nearest_location(location)
+            if nearest:
+                return nearest
+        
+        # Try geocoding by postal code and country
         if postal_code:
             location = geolocator.geocode(f"{postal_code}, {country_code}")
-            if location:
-                return location.latitude, location.longitude, postal_code, city, country_code
-            
-            if city:
-                location = geolocator.geocode(f"{city}, {postal_code}, {country_code}")
-                if location:
-                    return location.latitude, location.longitude, postal_code, city, country_code
+            if location and is_in_correct_country(location, country_code):
+                return location.latitude, location.longitude, postal_code, None, country_code
+            # Attempt nearest location if unsuccessful
+            nearest = find_nearest_location(location)
+            if nearest:
+                return nearest
         
+        # Try geocoding by city and country
         if city:
             location = geolocator.geocode(f"{city}, {country_code}")
-            if location:
+            if location and is_in_correct_country(location, country_code):
                 return location.latitude, location.longitude, None, city, country_code
+            # Attempt nearest location if unsuccessful
+            nearest = find_nearest_location(location)
+            if nearest:
+                return nearest
         
+        # If all else fails, geocode the capital city of the country
         capital_location = geolocator.geocode(f"capital city of {country_code}")
-        if capital_location:
+        if capital_location and is_in_correct_country(capital_location, country_code):
             return capital_location.latitude, capital_location.longitude, None, None, country_code
         
+        # Return None if no valid geocode results were found
         return None, None, None, None, None
+
     except Exception as e:
+        # Handle exceptions gracefully
+        print(f"Geocoding error: {e}")
         return None, None, None, None, None
 
 def save_to_excel(df, original_filename):
@@ -59,6 +122,8 @@ def validate_template(df, scenario):
                             'country_code_dest', 'postal_code_dest', 'city_dest', 'layer'}
     elif scenario == "Distance calculation":
         required_columns = {'country_code_orig', 'postal_code_orig', 'city_orig','country_code_dest', 'postal_code_dest', 'city_dest'}
+    elif scenario == "Volume visualization":
+        required_columns = {'country_code', 'postal_code', 'city', 'volume'}
     else:
         return False
     
@@ -89,6 +154,14 @@ def zip_templates_folder():
     zip_buffer.seek(0)  # Move to the start of the BytesIO buffer
     return zip_buffer.getvalue()
 
+def scale_dot_size(volume, min_volume, max_volume):
+    """Dynamically scale the dot size based on the volume value."""
+    min_size = 2  # Minimum dot size
+    max_size = 15  # Maximum dot size
+    if max_volume == min_volume:  # Prevent division by zero
+        return min_size
+    return min_size + (max_size - min_size) * ((volume - min_volume) / (max_volume - min_volume))
+
 # Streamlit app starts here
 st.set_page_config(page_title="Data Visualization Tool", layout="wide")
 
@@ -99,7 +172,7 @@ progress_text_container = st.empty()
 
 ### Version ###
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='text-align: center; font-size:10px; margin-top:-20px;'>Version: 1.2.0</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='text-align: center; font-size:10px; margin-top:-20px;'>Version: 1.3.0</p>", unsafe_allow_html=True)
 ### Version ###
 
 # Initialize session state variables if they don't exist
@@ -122,7 +195,7 @@ if 'dot_size' not in st.session_state:
 
 with st.sidebar:
     # Store the currently selected scenario
-    selected_scenario = st.selectbox("Select a scenario", ("Standard visualization", "Supply-chain visualization", "Distance calculation"))
+    selected_scenario = st.selectbox("Select a scenario", ("Standard visualization","Volume visualization", "Supply-chain visualization", "Distance calculation"))
 
     # Check if the scenario has changed
     if 'scenario' in st.session_state and st.session_state.scenario != selected_scenario:
@@ -186,8 +259,23 @@ if uploaded_file:
                 if lat is not None and lon is not None:
                     location_bounds.append([lat, lon])
 
+            elif selected_scenario == "Volume visualization":
+                # Find min and max volume for smart scaling
+                min_volume = df['volume'].min()
+                max_volume = df['volume'].max()
+
+                country_code = row['country_code']
+                postal_code = row.get('postal_code')
+                city = row.get('city')
+
+                lat, lon, _, _, _ = geocode_location(country_code, postal_code, city)
+                df.at[index, 'latitude'] = lat
+                df.at[index, 'longitude'] = lon
+
+                if lat is not None and lon is not None:
+                    location_bounds.append([lat, lon])
+
             elif selected_scenario == "Supply-chain visualization":
-                # Geocode destination
                 country_code_dest = row['country_code_dest']
                 postal_code_dest = row.get('postal_code_dest')
                 city_dest = row.get('city_dest')
@@ -196,7 +284,6 @@ if uploaded_file:
                 df.at[index, 'latitude'] = lat
                 df.at[index, 'longitude'] = lon
 
-                # Geocode warehouse
                 country_code_warehouse = row['country_code_warehouse']
                 postal_code_warehouse = row.get('postal_code_warehouse')
                 city_warehouse = row.get('city_warehouse')
@@ -268,6 +355,41 @@ if uploaded_file:
 
             progress_bar_container.empty()
 
+        if selected_scenario == "Volume visualization":
+                    plotted_layers = set()  # Track plotted layers
+
+                    for index, row in df.iterrows():
+                        lat = row['latitude']
+                        lon = row['longitude']
+                        volume = row['volume']
+
+                        if lat and lon:
+                            color = st.session_state.layer_colors.get(volume, "#808080")
+                            size = scale_dot_size(volume, min_volume, max_volume)
+                            folium.CircleMarker(
+                                location=[lat, lon],
+                                radius=size,
+                                color=color,
+                                fill=True,
+                                fill_color="808080",
+                                fill_opacity=1.0
+                            ).add_to(map_object)
+                            location_bounds.append([lat, lon])  # Add to bounds for zoom
+
+                            # Add the layer to the set of plotted layers
+                            plotted_layers.add(volume)
+
+                    # Fit the map to the bounds of all plotted locations
+                    if location_bounds:
+                        map_object.fit_bounds(location_bounds)
+
+                    # Render the map on the left side
+                    col1, col2 = st.columns([2, 1])
+                    with col1:
+                        folium_static(map_object)
+
+                    progress_bar_container.empty()
+
         elif selected_scenario == "Supply-chain visualization":
             plotted_layers = set()  # Track plotted layers
             location_bounds = []  # Initialize location bounds
@@ -330,7 +452,7 @@ if uploaded_file:
                     <h4>LEGEND</h4>
                     <div style='margin-bottom: 1px;'>
                         <span style='background-color:yellow; width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 1px;'></span>
-                        Warehouse/Shipping location
+                        Shipping location
                     </div>
                 """
 
@@ -345,7 +467,6 @@ if uploaded_file:
                 components.html(legend_html, height=150 + len(plotted_layers) * 20)  # Adjust height dynamically
 
             progress_bar_container.empty()
-
 
         elif selected_scenario == "Distance calculation":
 
